@@ -1,0 +1,18 @@
+syntax="proto3";
+package event;
+option go_package = "github.com/snuggie12/eida/event";
+
+import "google/protobuf/timestamp.proto";
+
+service Emitter {
+  rpc Emit (Event) returns (EmitResponse) {}
+}
+
+message Event {
+  google.protobuf.Timestamp eventStart = 1;
+  int32 eventType = 2;
+}
+
+message EmitResponse {
+  string testReply = 1;
+}

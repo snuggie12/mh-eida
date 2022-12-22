@@ -1,0 +1,39 @@
+/*
+Copyright © 2022 NAME HERE <EMAIL ADDRESS>
+
+*/
+package main
+
+//import "snuggie12/eida/cmd"
+
+/* func main() {
+	cmd.Execute()
+} */
+
+import (
+	"fmt"
+	"log"
+	"net"
+	"snuggie12/eida/pkg/event"
+
+	"google.golang.org/grpc"
+)
+
+var (
+	port = 9000
+)
+
+// for now this would be the ingester
+func main() {
+  lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+  if err != nil {
+    log.Fatalf("failed to listen: %v", err)
+  }
+
+	grpcServer := grpc.NewServer()
+	event.RegisterEmitterServer(grpcServer, &event.Server{})
+
+	if err := grpcServer.Serve(lis); err != nil {
+		log.Fatalf("failed to serve: %s", err)
+	}
+}
