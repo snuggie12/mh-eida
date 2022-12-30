@@ -29,10 +29,12 @@ func init() {
 
 	serverCmd.PersistentFlags().Bool("admin-listen-local", false, "Only listen on localhost")
 	serverCmd.PersistentFlags().StringP("admin-port", "p", "8712", "port for admin endpoint")
+	serverCmd.PersistentFlags().Bool("admin-strict-loading", true, "If there are collisions in receiver configs then exit")
 	serverCmd.PersistentFlags().String("log-level", "info", "Output level of logs (debug, info, warn, error, dpanic, panic, fatal)")
 
 	viper.BindPFlag("admin.listenLocal", serverCmd.PersistentFlags().Lookup("admin-listen-local"))
 	viper.BindPFlag("admin.port", serverCmd.PersistentFlags().Lookup("admin-port"))
+	viper.BindPFlag("admin.strictLoadingEnabled", serverCmd.PersistentFlags().Lookup("admin-strict-loading"))
 	viper.BindPFlag("logging.level", serverCmd.PersistentFlags().Lookup("log-level"))
 
 	// Cobra supports local flags which will only run when this command
@@ -50,7 +52,6 @@ func serve(cmd *cobra.Command, args []string) {
 	if err != nil {
 		logger.Fatalw("Unable to decode into config struct", "error", err)
 	}
-	logger.Debugf("Starting with config: %v", config)
 
 	server := srv.NewServer(&config.Config, logger)
 	server.StartAdminServer()

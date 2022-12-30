@@ -5,7 +5,9 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"snuggie12/eida/component/receiver"
 	"snuggie12/eida/config"
+	"snuggie12/eida/util"
 	"syscall"
 
 	"go.uber.org/zap"
@@ -17,7 +19,7 @@ const (
 
 type Server struct {
 	AdminConfig *config.AdminConfig
-	FullConfig *config.Config
+	FullConfig  *config.Config
 	Logger      *zap.SugaredLogger
 }
 
@@ -29,7 +31,7 @@ func newServer(conf *config.Config, logger *zap.SugaredLogger) *Server {
 	adminConf := config.NewAdminConfig(conf.AdminConfigOptions)
 	server := &Server{
 		AdminConfig: adminConf,
-		FullConfig: conf,
+		FullConfig:  conf,
 		Logger:      logger,
 	}
 
@@ -49,7 +51,7 @@ func (server *Server) StartAdminServer() {
 	}
 
 	logger.Infow("Admin Server Configuration",
-		"address", server.AdminConfig.Address,
+		"address", util.FriendlyAddress(server.AdminConfig.Address),
 		"port", server.AdminConfig.Port,
 	)
 
@@ -59,23 +61,26 @@ func (server *Server) StartAdminServer() {
 	server.addPprofToAdmin(adminMux)
 	server.addHealthToAdmin(adminMux)
 
-	go server.startAdmin(adminMux)
+	go server.startAdmin(done, adminMux)
 
 	componentsConfig := server.FullConfig.ParseFullConfig()
 	logger.Debugw("Components config",
-		"receivers", componentsConfig.ReceiverConfigs,
+		"receivers", config.FriendlyReceiverConfigs(componentsConfig.ReceiverConfigs),
 	)
+
+	go receiver.StartReceivers(done, componentsConfig.ReceiverConfigs, logger, server.AdminConfig.StrictLoadingEnabled)
 
 	<-done
 	logger.Info("Signal Received. Stopping the Server")
 }
 
-func (server *Server) startAdmin(mux *http.ServeMux) {
+func (server *Server) startAdmin(doneChan chan os.Signal, mux *http.ServeMux) {
 	logger := server.Logger
 
 	err := http.ListenAndServe(fmt.Sprintf("%v:%v", server.AdminConfig.Address, server.AdminConfig.Port), mux)
 	if err != nil {
 		logger.Errorf("Failed to start admin endpoint: %v", err)
+		doneChan <- syscall.SIGILL
 	}
 
 }

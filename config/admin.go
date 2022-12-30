@@ -1,17 +1,24 @@
 package config
 
-type AdminConfig struct {
-	HttpConfig
+type AdminConfigOptions struct {
+	HttpConfigOptions  `mapstructure:",squash"`
+	StrictLoadingEnabled bool `mapstructure:"strictLoadingEnabled"`
 }
 
-func NewAdminConfig(adminConfOpts *HttpConfigOptions) *AdminConfig {
+type AdminConfig struct {
+	HttpConfig
+	StrictLoadingEnabled bool
+}
+
+func NewAdminConfig(adminConfOpts *AdminConfigOptions) *AdminConfig {
 	return newAdminConfig(adminConfOpts)
 }
 
-func newAdminConfig(adminConfOpts *HttpConfigOptions) *AdminConfig {
-	adminConf := NewHttpConfig(adminConfOpts)
+func newAdminConfig(adminConfOpts *AdminConfigOptions) *AdminConfig {
+	adminHttpConf := NewHttpConfig(&adminConfOpts.HttpConfigOptions)
 	return &AdminConfig{
-		HttpConfig: adminConf,
+		HttpConfig: adminHttpConf,
+		StrictLoadingEnabled: adminConfOpts.StrictLoadingEnabled,
 	}
 }
 

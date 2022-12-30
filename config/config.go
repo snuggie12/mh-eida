@@ -5,10 +5,10 @@ import (
 )
 
 type Config struct {
-	AdminConfigOptions *HttpConfigOptions `mapstructure:"admin"`
+	AdminConfigOptions *AdminConfigOptions `mapstructure:"admin,omitempty"`
 	InputConfig        *InputConfig
 	Logger             *zap.SugaredLogger
-	ReceiverConfigsOptions []*HttpConfigOptions `mapstructure:"receivers"`
+	ReceiverConfigsOptions []*ReceiverConfigOptions `mapstructure:"receivers"`
 }
 
 type ComponentsConfig struct {
@@ -35,7 +35,7 @@ func (conf *Config) ParseFullConfig() (*ComponentsConfig) {
 	return &ComponentsConf
 }
 
-func ParseRecieverConfigs(receiverConfsOpts []*HttpConfigOptions) ([]ReceiverConfig) {
+func ParseRecieverConfigs(receiverConfsOpts []*ReceiverConfigOptions) ([]ReceiverConfig) {
 	receiverConfs := make([]ReceiverConfig, 0)
 	for _, receiverConfOpts := range(receiverConfsOpts) {
 		receiverConf, err := NewReceiverConfig(receiverConfOpts)

@@ -1,5 +1,7 @@
 package config
 
+import "snuggie12/eida/util"
+
 type HttpConfigOptions struct {
 	ListenLocal bool   `mapStructure:"listenLocal"`
 	Port        string `mapStructure:"port"`
@@ -25,4 +27,11 @@ func NewHttpConfig(httpConfOpts *HttpConfigOptions) HttpConfig {
 func (httpConfig *HttpConfig) parseHttpConfig() (error) {
 	//TODO: make sure port is valid, IPs, etc
 	return nil
+}
+
+func FriendlyHttpConfigs(httpConfs []HttpConfig) ([]HttpConfig) {
+	for _, httpConf := range(httpConfs) {
+		httpConf.Address = util.FriendlyAddress(httpConf.Address)
+	}
+	return httpConfs
 }
