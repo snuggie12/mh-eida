@@ -1,27 +1,35 @@
 package server
 
 import (
-	//"net/http"
+	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
+	"snuggie12/eida/config"
 	"syscall"
 
 	"go.uber.org/zap"
-	//"snuggie12/eida/config"
+)
+
+const (
+	LivenessProbePath string = "/livez"
 )
 
 type Server struct {
-	AdminConfig *AdminConfig
+	AdminConfig *config.AdminConfig
+	FullConfig *config.Config
 	Logger      *zap.SugaredLogger
 }
 
-func NewServer(adminConf *AdminConfig, logger *zap.SugaredLogger) *Server {
-	return newServer(adminConf, logger)
+func NewServer(conf *config.Config, logger *zap.SugaredLogger) *Server {
+	return newServer(conf, logger)
 }
 
-func newServer(adminConf *AdminConfig, logger *zap.SugaredLogger) *Server {
+func newServer(conf *config.Config, logger *zap.SugaredLogger) *Server {
+	adminConf := config.NewAdminConfig(conf.AdminConfigOptions)
 	server := &Server{
 		AdminConfig: adminConf,
+		FullConfig: conf,
 		Logger:      logger,
 	}
 
@@ -35,18 +43,39 @@ func (server *Server) StartAdminServer() {
 	logger := server.Logger
 	logger.Info("Parsing Admin Server Config")
 
-	server.parseAdminConfig()
+	err := server.AdminConfig.ParseAdminConfig()
+	if err != nil {
+		logger.Errorf("Unable to parse admin config: %v", err)
+	}
 
 	logger.Infow("Admin Server Configuration",
-		"host", server.AdminConfig.AdminHost,
-		"port", server.AdminConfig.AdminPort,
+		"address", server.AdminConfig.Address,
+		"port", server.AdminConfig.Port,
 	)
-	//adminMux := http.NewServeMux()
 
-	if server.AdminConfig.MergeMetricsToAdmin == true {
-		logger.Debugw("Starting metrics on the same port as the admin API", "port", server.AdminConfig.AdminPort)
-	}
+	adminMux := http.NewServeMux()
+
+	server.addMetricsToAdmin(adminMux)
+	server.addPprofToAdmin(adminMux)
+	server.addHealthToAdmin(adminMux)
+
+	go server.startAdmin(adminMux)
+
+	componentsConfig := server.FullConfig.ParseFullConfig()
+	logger.Debugw("Components config",
+		"receivers", componentsConfig.ReceiverConfigs,
+	)
 
 	<-done
 	logger.Info("Signal Received. Stopping the Server")
+}
+
+func (server *Server) startAdmin(mux *http.ServeMux) {
+	logger := server.Logger
+
+	err := http.ListenAndServe(fmt.Sprintf("%v:%v", server.AdminConfig.Address, server.AdminConfig.Port), mux)
+	if err != nil {
+		logger.Errorf("Failed to start admin endpoint: %v", err)
+	}
+
 }

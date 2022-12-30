@@ -23,31 +23,17 @@ var serverCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(serverCmd)
 
-	viper.SetDefault("admin", map[string]interface{}{
-		"host": "localhost",
-		"metrics": map[string]string{
-			"path": "/metrics",
-			"port": "5555",
-		},
-		"port": "8712",
-	},
-	)
-
 	viper.SetDefault("logging", map[string]string{
 		"level": "info",
 	})
 
-	serverCmd.PersistentFlags().StringP("admin-host", "a", "", "Address/IP for admin endpoint")
-	serverCmd.PersistentFlags().StringP("admin-port", "p", "", "port for admin endpoint")
+	serverCmd.PersistentFlags().Bool("admin-listen-local", false, "Only listen on localhost")
+	serverCmd.PersistentFlags().StringP("admin-port", "p", "8712", "port for admin endpoint")
 	serverCmd.PersistentFlags().String("log-level", "info", "Output level of logs (debug, info, warn, error, dpanic, panic, fatal)")
-	serverCmd.PersistentFlags().String("metrics-path", "", "path for metrics endpoint")
-	serverCmd.PersistentFlags().String("metrics-port", "", "port for metrics endpoint")
 
-	viper.BindPFlag("admin.host", serverCmd.PersistentFlags().Lookup("admin-host"))
+	viper.BindPFlag("admin.listenLocal", serverCmd.PersistentFlags().Lookup("admin-listen-local"))
 	viper.BindPFlag("admin.port", serverCmd.PersistentFlags().Lookup("admin-port"))
 	viper.BindPFlag("logging.level", serverCmd.PersistentFlags().Lookup("log-level"))
-	viper.BindPFlag("admin.metrics.path", serverCmd.PersistentFlags().Lookup("metrics-path"))
-	viper.BindPFlag("admin.metrics.port", serverCmd.PersistentFlags().Lookup("metrics-port"))
 
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
@@ -58,7 +44,7 @@ func serve(cmd *cobra.Command, args []string) {
 	logger := cmdutil.Logger(viper.GetString("logging.level"))
 	logger.Info("Starting Admin Server")
 
-	var config Config
+	var config CmdConfig
 
 	err := viper.Unmarshal(&config)
 	if err != nil {
@@ -66,6 +52,6 @@ func serve(cmd *cobra.Command, args []string) {
 	}
 	logger.Debugf("Starting with config: %v", config)
 
-	server := srv.NewServer(&config.AdminConfig, logger)
+	server := srv.NewServer(&config.Config, logger)
 	server.StartAdminServer()
 }
