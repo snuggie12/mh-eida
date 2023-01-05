@@ -6,7 +6,7 @@ import (
 )
 
 // RegisterProfiler adds pprof endpoints to mux.
-func (server *Server) addPprofToAdmin(mux *http.ServeMux) {
+func addPprofToAdmin(mux *http.ServeMux) {
 	mux.HandleFunc("/debug/pprof/", pprof.Index)
 	mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
 	mux.HandleFunc("/debug/pprof/profile", pprof.Profile)

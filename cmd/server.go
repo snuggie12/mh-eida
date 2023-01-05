@@ -55,4 +55,5 @@ func serve(cmd *cobra.Command, args []string) {
 
 	server := srv.NewServer(&config.Config, logger)
 	server.StartAdminServer()
+
 }

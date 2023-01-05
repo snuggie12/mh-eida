@@ -30,6 +30,20 @@ func newReceiverConfig(receiverConfOpts *ReceiverConfigOptions) (*ReceiverConfig
 
 }
 
+func ParseRecieverConfigs(receiverConfsOpts []*ReceiverConfigOptions) ([]ReceiverConfig) {
+	receiverConfs := make([]ReceiverConfig, 0)
+	for _, receiverConfOpts := range(receiverConfsOpts) {
+		receiverConf, err := NewReceiverConfig(receiverConfOpts)
+		if err != nil {
+			continue
+		}
+
+		receiverConfs = append(receiverConfs, *receiverConf)
+	}
+	
+	return receiverConfs
+}
+
 func FriendlyReceiverConfigs(receiverConfs []ReceiverConfig) []ReceiverConfig {
 	friendlyReceiverConfs := make([]ReceiverConfig, 0)
 	for _, receiverConf := range receiverConfs {
@@ -40,4 +54,21 @@ func FriendlyReceiverConfigs(receiverConfs []ReceiverConfig) []ReceiverConfig {
 	}
 
 	return friendlyReceiverConfs
+}
+
+var typeToGenericType = map[string]string{
+	"argocd":         "http",
+	"launchDarkly":   "http",
+	"genericWebhook": "http",
+	"kubernetes":     "pull",
+}
+
+func GetGenericType(specificType string) (string) {
+
+	receiverType := typeToGenericType[specificType]
+	if receiverType == "" {
+		receiverType = "none"
+	}
+
+	return receiverType
 }

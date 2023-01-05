@@ -34,17 +34,3 @@ func (conf *Config) ParseFullConfig() (*ComponentsConfig) {
 	}
 	return &ComponentsConf
 }
-
-func ParseRecieverConfigs(receiverConfsOpts []*ReceiverConfigOptions) ([]ReceiverConfig) {
-	receiverConfs := make([]ReceiverConfig, 0)
-	for _, receiverConfOpts := range(receiverConfsOpts) {
-		receiverConf, err := NewReceiverConfig(receiverConfOpts)
-		if err != nil {
-			continue
-		}
-
-		receiverConfs = append(receiverConfs, *receiverConf)
-	}
-	
-	return receiverConfs
-}

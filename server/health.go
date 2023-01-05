@@ -5,8 +5,12 @@ import (
 	"net/http"
 )
 
+const (
+	LivenessProbePath string = "/livez"
+)
+
 // RegisterProfiler adds pprof endpoints to mux.
-func (server *Server) addHealthToAdmin(mux *http.ServeMux) {
+func addHealthToAdmin(mux *http.ServeMux) {
 	// livenessProbe
 	mux.HandleFunc(LivenessProbePath, func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]bool{"ok": true})

@@ -21,7 +21,3 @@ func newAdminConfig(adminConfOpts *AdminConfigOptions) *AdminConfig {
 		StrictLoadingEnabled: adminConfOpts.StrictLoadingEnabled,
 	}
 }
-
-func (conf *AdminConfig) ParseAdminConfig() error {
-	return nil
-}

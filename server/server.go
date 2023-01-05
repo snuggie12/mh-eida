@@ -5,22 +5,19 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"snuggie12/eida/component/receiver"
 	"snuggie12/eida/config"
+	metricsTypes "snuggie12/eida/pkg/types/metrics"
+	"snuggie12/eida/server/metrics"
 	"snuggie12/eida/util"
 	"syscall"
+	"time"
 
 	"go.uber.org/zap"
 )
 
-const (
-	LivenessProbePath string = "/livez"
-)
-
 type Server struct {
-	AdminConfig *config.AdminConfig
-	FullConfig  *config.Config
-	Logger      *zap.SugaredLogger
+	Config *config.Config
+	Logger *zap.SugaredLogger
 }
 
 func NewServer(conf *config.Config, logger *zap.SugaredLogger) *Server {
@@ -28,59 +25,77 @@ func NewServer(conf *config.Config, logger *zap.SugaredLogger) *Server {
 }
 
 func newServer(conf *config.Config, logger *zap.SugaredLogger) *Server {
-	adminConf := config.NewAdminConfig(conf.AdminConfigOptions)
-	server := &Server{
-		AdminConfig: adminConf,
-		FullConfig:  conf,
-		Logger:      logger,
+	//adminConf := config.NewAdminConfig(conf.AdminConfigOptions)
+	return &Server{
+		Config: conf,
+		Logger: logger,
 	}
-
-	return server
 }
 
 func (server *Server) StartAdminServer() {
-	done := make(chan os.Signal, 1)
-	signal.Notify(done, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+	doneChan := make(chan os.Signal, 1)
+	signal.Notify(doneChan, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
 	logger := server.Logger
-	logger.Info("Parsing Admin Server Config")
 
-	err := server.AdminConfig.ParseAdminConfig()
-	if err != nil {
-		logger.Errorf("Unable to parse admin config: %v", err)
-	}
+	adminServer := newAdminServer(server.Config)
 
-	logger.Infow("Admin Server Configuration",
-		"address", util.FriendlyAddress(server.AdminConfig.Address),
-		"port", server.AdminConfig.Port,
+	logger.Debugw("Admin Server Configuration",
+		"address", util.FriendlyAddress(adminServer.config.Address),
+		"port", adminServer.config.Port,
 	)
 
-	adminMux := http.NewServeMux()
-
-	server.addMetricsToAdmin(adminMux)
-	server.addPprofToAdmin(adminMux)
-	server.addHealthToAdmin(adminMux)
-
-	go server.startAdmin(done, adminMux)
-
-	componentsConfig := server.FullConfig.ParseFullConfig()
+	componentsConfig := server.Config.ParseFullConfig()
 	logger.Debugw("Components config",
 		"receivers", config.FriendlyReceiverConfigs(componentsConfig.ReceiverConfigs),
 	)
 
-	go receiver.StartReceivers(done, componentsConfig.ReceiverConfigs, logger, server.AdminConfig.StrictLoadingEnabled)
-
-	<-done
-	logger.Info("Signal Received. Stopping the Server")
-}
-
-func (server *Server) startAdmin(doneChan chan os.Signal, mux *http.ServeMux) {
-	logger := server.Logger
-
-	err := http.ListenAndServe(fmt.Sprintf("%v:%v", server.AdminConfig.Address, server.AdminConfig.Port), mux)
+	metricsServer, err := metrics.NewMetricsServer(adminServer.mux)
 	if err != nil {
-		logger.Errorf("Failed to start admin endpoint: %v", err)
-		doneChan <- syscall.SIGILL
+		logger.Fatalw("Error occurred while registering creating metrics server", "error", err)
 	}
 
+	recCounterChan := metricsServer.ReceiverMetricsServer.RequestsCounterChan
+	recHistogramChan := metricsServer.ReceiverMetricsServer.RequestsHistogramChan
+
+	metricsDone := make(chan bool)
+
+	go metricsServer.ReceiverMetricsServer.ProcessMetricsInfo(metricsDone, logger)
+
+	var recCounterInfo metricsTypes.ReceiverRequestsCounterInfo
+
+	recCounterInfo.ReceiverName = "joebob"
+	recCounterInfo.ReceiverPort = "5555"
+	recCounterInfo.StatusCode = "200"
+
+	recCounterChan <- recCounterInfo
+
+	recCounterInfo.StatusCode = "569"
+
+	recCounterChan <- recCounterInfo
+
+	var recHistogramInfo metricsTypes.ReceiverRequestsHistogramInfo
+
+	recHistogramInfo.ReceiverName = "joebob"
+	recHistogramInfo.ReceiverPort = "5555"
+	recHistogramInfo.StatusCode = "503"
+	recHistogramInfo.Duration = time.Duration(time.Duration(10)*time.Second)
+
+	recHistogramChan <- recHistogramInfo
+
+	recHistogramInfo.Duration = time.Duration(time.Duration(200)*time.Millisecond)
+
+	recHistogramChan <- recHistogramInfo
+
+	//Start up the metrics server
+	go http.ListenAndServe(fmt.Sprintf("%v:%v",
+		adminServer.config.Address,
+		adminServer.config.Port,
+	), adminServer.mux)
+
+	//receiver.InitializeReceivers(doneChan, componentsConfig.ReceiverConfigs, logger, adminServer.config.StrictLoadingEnabled, *metricsServer)
+
+	<-doneChan
+
+	logger.Info("Signal Received. Stopping the Server")
 }
