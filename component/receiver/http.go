@@ -1,10 +1,11 @@
 package receiver
-/* 
+
 import (
 	"fmt"
 	"net/http"
 	"snuggie12/eida/config"
 	"snuggie12/eida/server/metrics"
+	metricsTypes "snuggie12/eida/pkg/types/metrics"
 	"time"
 
 	"go.uber.org/zap"
@@ -44,30 +45,56 @@ func startHttpReceiver(receiverConf *config.ReceiverConfig, logger *zap.SugaredL
 		"address", recAddress,
 		"path", recPath,
 		"port", recPort,
-		"metrics-server", httpReceiver.MetricsServer,
 	)
 
-	receiverMetricsServe := metricsServer.ReceiverMetricsServers[recName]
+	logger.Debug("before vars")
+	var (
+		recCounterInfo   metricsTypes.ReceiverRequestsCounterInfo
+		recHistogramInfo metricsTypes.ReceiverRequestsHistogramInfo
+	)
+
+	logger.Debug("after vars, before metrics server")
+	recMetricsServe := metricsServer.ReceiverMetricsServer
+
+	logger.Debug("before chans")
+	recCounterChan := recMetricsServe.RequestsCounterChan
+	recHistogramChan := recMetricsServe.RequestsHistogramChan
+	logger.Debug("after chans")
+
+	logger.Debug("before info")
+
+	recCounterInfo.ReceiverName, recHistogramInfo.ReceiverName = recName, recName
+	recCounterInfo.ReceiverPort, recHistogramInfo.ReceiverPort = recPort, recPort
 
 	twoExExHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t := time.Now()
 		w.WriteHeader(http.StatusOK)
-		receiverMetricsServe.IncRequestsHistogram(recName, recPort, "200", time.Since(t))
-		receiverMetricsServe.IncRequestsCounter(recName, recPort, "200")
-		w.Write([]byte("Hello from example application."))
+		recCounterInfo.StatusCode, recHistogramInfo.StatusCode = "200", "200"
+		recHistogramInfo.Duration = time.Since(t)
+		recCounterChan <- recCounterInfo
+		recHistogramChan <- recHistogramInfo
+
+		w.Write([]byte("200 - Hello from example application.\n"))
 	})
 	fourExExHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t := time.Now()
 		w.WriteHeader(http.StatusNotFound)
-		receiverMetricsServe.IncRequestsHistogram(recName, recPort, "404", time.Since(t))
-		receiverMetricsServe.IncRequestsCounter(recName, recPort, "404")
+		recCounterInfo.StatusCode, recHistogramInfo.StatusCode = "404", "404"
+		recHistogramInfo.Duration = time.Since(t)
+		recCounterChan <- recCounterInfo
+		recHistogramChan <- recHistogramInfo
+
+		w.Write([]byte("404 - Not Found\n"))
 	})
 	fiveExExHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t := time.Now()
 		w.WriteHeader(http.StatusInternalServerError)
-		receiverMetricsServe.IncRequestsHistogram(recName, recPort, "503", time.Since(t))
-		receiverMetricsServe.IncRequestsCounter(recName, recPort, "503")
+		recCounterInfo.StatusCode, recHistogramInfo.StatusCode = "503", "503"
+		recHistogramInfo.Duration = time.Since(t)
+		recCounterChan <- recCounterInfo
+		recHistogramChan <- recHistogramInfo
 
+		w.Write([]byte("503 - Bad Gateway\n"))
 	})
 
 	mux := http.NewServeMux()
@@ -81,4 +108,3 @@ func startHttpReceiver(receiverConf *config.ReceiverConfig, logger *zap.SugaredL
 	logger.Debug("donezo")
 	return nil
 }
- */

@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -58,7 +59,7 @@ func NewMetricsServer(mux *http.ServeMux) (*MetricsServer, error) {
 	mux.Handle(MetricsPath, promhttp.HandlerFor(prometheus.Gatherers{
 		prometheus.DefaultGatherer,
 		reg,
-}, promhttp.HandlerOpts{}))
+	}, promhttp.HandlerOpts{}))
 
 	reg.MustRegister(receiverRequestsCounter)
 	reg.MustRegister(receiverRequestsHistogram)
@@ -92,14 +93,14 @@ func normalizeLabels(prefix string, appLabels []string) []string {
 	return normLabels
 }
 
-func (metricsSrv *ReceiverMetricsServer) ProcessMetricsInfo(doneChan chan bool, logger *zap.SugaredLogger) {
+func (metricsSrv *ReceiverMetricsServer) ProcessMetricsInfo(ctx context.Context, componentErrorChan chan error, logger *zap.SugaredLogger) {
 	for {
 		select {
 		case counterInfo := <-metricsSrv.RequestsCounterChan:
-			metricsSrv.RequestsCounter.WithLabelValues(counterInfo.ParseInfo())
+			metricsSrv.RequestsCounter.WithLabelValues(counterInfo.ParseInfo()).Inc()
 		case histogramInfo := <-metricsSrv.RequestsHistogramChan:
 			metricsSrv.RequestsHistogram.WithLabelValues(histogramInfo.ParseInfo()).Observe(histogramInfo.Duration.Seconds())
-		case <-doneChan:
+		case <-componentErrorChan:
 			logger.Info("Stopping metrics receiver")
 			return
 		}

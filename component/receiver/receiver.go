@@ -1,9 +1,8 @@
 package receiver
 
-/*
 import (
+	"context"
 	"fmt"
-	"os"
 	"snuggie12/eida/config"
 	"snuggie12/eida/server/metrics"
 
@@ -15,53 +14,48 @@ type Receiver struct {
 }
 
 func InitializeReceivers(
-	doneChan chan os.Signal,
+	componentErrorChan chan error,
+	ctx context.Context,
+	logger *zap.SugaredLogger,
+	metricsServer *metrics.MetricsServer,
 	receiverConfs []config.ReceiverConfig,
-	logger *zap.SugaredLogger, isStrict bool,
-	metricsServer metrics.MetricsServer) {
-	var (
-		errorCount int
-	)
+) {
 
 	// Loop through all receiver configs
 	for _, receiverConf := range receiverConfs {
 		receiverType := config.GetGenericType(receiverConf.Type)
 
 		// Attempt to start a receiver
-		go startReceiver(receiverType, receiverConf, logger, &metricsServer)
+		go startReceiver(componentErrorChan, receiverType, receiverConf, logger, metricsServer)
 
-		/* 		// If strict loading is on and there's an error then exit ASAP
-			if err != nil && isStrict {
-				logger.Errorw("Error while loading receiver and strict loading enabled",
-					"receiver-name", receiverConf.Name,
-					"error", err,
-				)
-				doneChan <- syscall.SIGILL
-			}
-
-			// Strict loading is off and we got errors. We'll simply warn that the receiver will not load
-			if err != nil {
-				errorCount++
-				logger.Warnw("Error adding receiver",
-					"receiver-name", receiverConf.Name,
-					"error", err,
-				)
-			}
+		// If strict loading is on and there's an error then exit ASAP
+/* 		if err == nil {
+			logger.Errorw("Error while loading receiver and strict loading enabled",
+				"receiver-name", receiverConf.Name,
+				"error", err,
+			)
+			componentErrorChan <- err
+		} */
+	}
+	logger.Info("Outside of startReceiver")
+	for {
+		select {
+		case err := <- componentErrorChan:
+			logger.Errorw("after start receiver loop", "error", err)
 		}
-
-		if errorCount >= len(receiverConfs) {
-			logger.Errorf("All receivers failed to load. Exiting...")
-			doneChan <- syscall.SIGILL
 	}
 }
 
-func startReceiver(recType string, recConf config.ReceiverConfig, logger *zap.SugaredLogger, metricsServer *metrics.MetricsServer) error {
+func startReceiver(compErrChan chan error, recType string, recConf config.ReceiverConfig, logger *zap.SugaredLogger, metricsServer *metrics.MetricsServer) error {
 	var err error
 
 	switch recType {
 	case "http":
 		logger.Infof("Starting receiver on port %v", recConf.Port)
-		err = startHttpReceiver(&recConf, logger, metricsServer)
+		go startHttpReceiver(&recConf, logger, metricsServer)
+/* 		if err != nil {
+			logger.Errorf("Problem starting http receiver: %v", err)
+		} */
 	case "none":
 		if recConf.Name == "" {
 			recConf.Name = "missing-name"
@@ -72,5 +66,5 @@ func startReceiver(recType string, recConf config.ReceiverConfig, logger *zap.Su
 	}
 
 	return err
+
 }
- */

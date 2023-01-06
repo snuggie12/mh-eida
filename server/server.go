@@ -1,16 +1,16 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
+	"snuggie12/eida/component/receiver"
 	"snuggie12/eida/config"
-	metricsTypes "snuggie12/eida/pkg/types/metrics"
 	"snuggie12/eida/server/metrics"
 	"snuggie12/eida/util"
 	"syscall"
-	"time"
 
 	"go.uber.org/zap"
 )
@@ -33,8 +33,11 @@ func newServer(conf *config.Config, logger *zap.SugaredLogger) *Server {
 }
 
 func (server *Server) StartAdminServer() {
-	doneChan := make(chan os.Signal, 1)
-	signal.Notify(doneChan, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	osSignalChan := make(chan os.Signal, 1)
+	componentErrorChan := make(chan error)
+	signal.Notify(osSignalChan, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
 	logger := server.Logger
 
@@ -55,37 +58,7 @@ func (server *Server) StartAdminServer() {
 		logger.Fatalw("Error occurred while registering creating metrics server", "error", err)
 	}
 
-	recCounterChan := metricsServer.ReceiverMetricsServer.RequestsCounterChan
-	recHistogramChan := metricsServer.ReceiverMetricsServer.RequestsHistogramChan
-
-	metricsDone := make(chan bool)
-
-	go metricsServer.ReceiverMetricsServer.ProcessMetricsInfo(metricsDone, logger)
-
-	var recCounterInfo metricsTypes.ReceiverRequestsCounterInfo
-
-	recCounterInfo.ReceiverName = "joebob"
-	recCounterInfo.ReceiverPort = "5555"
-	recCounterInfo.StatusCode = "200"
-
-	recCounterChan <- recCounterInfo
-
-	recCounterInfo.StatusCode = "569"
-
-	recCounterChan <- recCounterInfo
-
-	var recHistogramInfo metricsTypes.ReceiverRequestsHistogramInfo
-
-	recHistogramInfo.ReceiverName = "joebob"
-	recHistogramInfo.ReceiverPort = "5555"
-	recHistogramInfo.StatusCode = "503"
-	recHistogramInfo.Duration = time.Duration(time.Duration(10)*time.Second)
-
-	recHistogramChan <- recHistogramInfo
-
-	recHistogramInfo.Duration = time.Duration(time.Duration(200)*time.Millisecond)
-
-	recHistogramChan <- recHistogramInfo
+	go metricsServer.ReceiverMetricsServer.ProcessMetricsInfo(ctx, componentErrorChan, logger)
 
 	//Start up the metrics server
 	go http.ListenAndServe(fmt.Sprintf("%v:%v",
@@ -93,9 +66,19 @@ func (server *Server) StartAdminServer() {
 		adminServer.config.Port,
 	), adminServer.mux)
 
-	//receiver.InitializeReceivers(doneChan, componentsConfig.ReceiverConfigs, logger, adminServer.config.StrictLoadingEnabled, *metricsServer)
+	receiver.InitializeReceivers(componentErrorChan, ctx, logger, metricsServer, componentsConfig.ReceiverConfigs)
 
-	<-doneChan
+	for {
+		select {
+		case err := <-componentErrorChan:
+			logger.Errorw("Component has failed.", "error", zap.Error(err))
+			return
+		case signal := <-osSignalChan:
+			logger.Infow("Received signal. Shutting down", "signal", signal)
+			return
+		case <-ctx.Done():
+			logger.Infow("Context done. Shutting down", "context error", zap.Error(ctx.Err()))
+		}
+	}
 
-	logger.Info("Signal Received. Stopping the Server")
 }
