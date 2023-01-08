@@ -1,70 +1,64 @@
 package receiver
 
 import (
-	"context"
-	"fmt"
+	"snuggie12/eida/component/common"
 	"snuggie12/eida/config"
-	"snuggie12/eida/server/metrics"
-
-	"go.uber.org/zap"
 )
 
+type Receivers []*Receiver
+/* struct {
+	Receivers []*Receiver
+} */
+
 type Receiver struct {
-	Config config.ReceiverConfig
+	ComponentCommon common.ComponentCommon
+	ReceiverName string
+	ReceiverConfig config.ReceiverConfig
 }
 
-func InitializeReceivers(
-	componentErrorChan chan error,
-	ctx context.Context,
-	logger *zap.SugaredLogger,
-	metricsServer *metrics.MetricsServer,
-	receiverConfs []config.ReceiverConfig,
-) {
-
-	// Loop through all receiver configs
-	for _, receiverConf := range receiverConfs {
-		receiverType := config.GetGenericType(receiverConf.Type)
-
-		// Attempt to start a receiver
-		go startReceiver(componentErrorChan, receiverType, receiverConf, logger, metricsServer)
-
-		// If strict loading is on and there's an error then exit ASAP
-/* 		if err == nil {
-			logger.Errorw("Error while loading receiver and strict loading enabled",
-				"receiver-name", receiverConf.Name,
-				"error", err,
-			)
-			componentErrorChan <- err
-		} */
-	}
-	logger.Info("Outside of startReceiver")
-	for {
-		select {
-		case err := <- componentErrorChan:
-			logger.Errorw("after start receiver loop", "error", err)
+func InitializeReceivers(compCommon *common.ComponentCommon, receiverConfs map[string]*config.ReceiverConfig) (Receivers, error) {
+	logger := compCommon.Logger
+	receivers := make([]*Receiver, 0)
+	for receiverName, receiverConf := range(receiverConfs) {
+		receiver, err := initializeReceiver(compCommon, receiverName, receiverConf)
+		if err != nil {
+			logger.Error("Error while initializing receivers.", "receiver", receiverName)
+			compCommon.ComponentErrorChan <- err
+			return nil, err
 		}
+
+		logger.Debugw("Initialized receiver and appending to receivers", "receiver", receiver.ReceiverConfig)
+		receivers = append(receivers, receiver)
+	}
+
+	return receivers, nil
+}
+
+func initializeReceiver(compCommon *common.ComponentCommon, receiverName string, receiverConf *config.ReceiverConfig) (*Receiver, error) {
+	err := validateReceiverConfig(receiverConf)
+	if err != nil {
+		compCommon.ComponentErrorChan <- err
+		return nil, err
+	}
+
+	return &Receiver{
+		ComponentCommon: *compCommon,
+		ReceiverConfig: *receiverConf,
+	}, nil
+}
+
+func validateReceiverConfig(receiverConf *config.ReceiverConfig) error {
+	//TODO: actually validate something
+	return nil
+}
+
+func (receivers Receivers) Start() {
+	for _, receiver := range receivers {
+		receiver.start()
 	}
 }
 
-func startReceiver(compErrChan chan error, recType string, recConf config.ReceiverConfig, logger *zap.SugaredLogger, metricsServer *metrics.MetricsServer) error {
-	var err error
-
-	switch recType {
-	case "http":
-		logger.Infof("Starting receiver on port %v", recConf.Port)
-		go startHttpReceiver(&recConf, logger, metricsServer)
-/* 		if err != nil {
-			logger.Errorf("Problem starting http receiver: %v", err)
-		} */
-	case "none":
-		if recConf.Name == "" {
-			recConf.Name = "missing-name"
-		}
-		err = fmt.Errorf("Receiver config missing type. Receiver: %v", recConf.Name)
-	default:
-		err = fmt.Errorf("Not quite sure how you got here. Turn back now. Unknown error")
-	}
-
-	return err
-
+func (receiver Receiver) start() {
+	logger := receiver.ComponentCommon.Logger
+	logger.Info("inside of receiver.start()")
 }

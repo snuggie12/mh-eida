@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"snuggie12/eida/component/receiver"
+	"snuggie12/eida/component"
 	"snuggie12/eida/config"
 	"snuggie12/eida/server/metrics"
 	"snuggie12/eida/util"
@@ -44,13 +44,8 @@ func (server *Server) StartAdminServer() {
 	adminServer := newAdminServer(server.Config)
 
 	logger.Debugw("Admin Server Configuration",
-		"address", util.FriendlyAddress(adminServer.config.Address),
-		"port", adminServer.config.Port,
-	)
-
-	componentsConfig := server.Config.ParseFullConfig()
-	logger.Debugw("Components config",
-		"receivers", config.FriendlyReceiverConfigs(componentsConfig.ReceiverConfigs),
+		"address", util.FriendlyAddress(adminServer.config.HttpAddress),
+		"port", adminServer.config.HttpPort,
 	)
 
 	metricsServer, err := metrics.NewMetricsServer(adminServer.mux)
@@ -60,13 +55,28 @@ func (server *Server) StartAdminServer() {
 
 	go metricsServer.ReceiverMetricsServer.ProcessMetricsInfo(ctx, componentErrorChan, logger)
 
-	//Start up the metrics server
+	//Start up the admin server
 	go http.ListenAndServe(fmt.Sprintf("%v:%v",
-		adminServer.config.Address,
-		adminServer.config.Port,
+		adminServer.config.HttpAddress,
+		adminServer.config.HttpPort,
 	), adminServer.mux)
 
-	receiver.InitializeReceivers(componentErrorChan, ctx, logger, metricsServer, componentsConfig.ReceiverConfigs)
+	componentsConfig, err := server.Config.ParseFullConfig()
+	if err != nil {
+		logger.Errorw("Failed to parse component config", "error", err)
+	}
+
+	logger.Debugw("Components config",
+		"receivers", config.FriendlyReceiverConfigs(componentsConfig),
+	)
+
+	components := component.NewComponents(componentsConfig, logger, componentErrorChan)
+
+	go components.Senders.Start()
+
+	go components.Parsers.Start()
+
+	go components.Receivers.Start()
 
 	for {
 		select {

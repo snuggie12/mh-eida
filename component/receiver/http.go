@@ -4,18 +4,18 @@ import (
 	"fmt"
 	"net/http"
 	"snuggie12/eida/config"
-	"snuggie12/eida/server/metrics"
 	metricsTypes "snuggie12/eida/pkg/types/metrics"
+	"snuggie12/eida/server/metrics"
 	"time"
 
 	"go.uber.org/zap"
 )
 
 type httpReceiver struct {
-	Address       string
+	HttpAddress   string
 	Name          string
 	Path          string
-	Port          string
+	HttpPort      string
 	MetricsServer *metrics.MetricsServer
 }
 
@@ -25,10 +25,10 @@ func NewHttpReceiver(receiverConf *config.ReceiverConfig, metricsServer *metrics
 
 func newHttpReceiver(receiverConf *config.ReceiverConfig, metricsServer *metrics.MetricsServer) *httpReceiver {
 	return &httpReceiver{
-		Address:       receiverConf.Address,
+		HttpAddress:   receiverConf.HttpConfig.HttpAddress,
 		Name:          receiverConf.Name,
-		Path:          receiverConf.Path,
-		Port:          receiverConf.Port,
+		Path:          receiverConf.HttpConfig.Path,
+		HttpPort:      receiverConf.HttpConfig.HttpPort,
 		MetricsServer: metricsServer,
 	}
 }
@@ -36,10 +36,10 @@ func newHttpReceiver(receiverConf *config.ReceiverConfig, metricsServer *metrics
 func startHttpReceiver(receiverConf *config.ReceiverConfig, logger *zap.SugaredLogger, metricsServer *metrics.MetricsServer) error {
 	httpReceiver := newHttpReceiver(receiverConf, metricsServer)
 
-	recAddress := httpReceiver.Address
+	recAddress := httpReceiver.HttpAddress
 	recName := httpReceiver.Name
 	recPath := httpReceiver.Path
-	recPort := httpReceiver.Port
+	recPort := httpReceiver.HttpPort
 
 	logger.Debugw("startHttpReceiver configs",
 		"address", recAddress,
@@ -103,7 +103,7 @@ func startHttpReceiver(receiverConf *config.ReceiverConfig, logger *zap.SugaredL
 	mux.Handle("/internal-err", fiveExExHandler)
 
 	var srv *http.Server
-	srv = &http.Server{Addr: fmt.Sprintf("%v:%v", httpReceiver.Address, httpReceiver.Port), Handler: mux}
+	srv = &http.Server{Addr: fmt.Sprintf("%v:%v", httpReceiver.HttpAddress, httpReceiver.HttpPort), Handler: mux}
 	go logger.Fatal(srv.ListenAndServe())
 	logger.Debug("donezo")
 	return nil

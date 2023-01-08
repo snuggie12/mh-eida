@@ -2,12 +2,10 @@ package config
 
 type AdminConfigOptions struct {
 	HttpConfigOptions  `mapstructure:",squash"`
-	StrictLoadingEnabled bool `mapstructure:"strictLoadingEnabled"`
 }
 
 type AdminConfig struct {
 	HttpConfig
-	StrictLoadingEnabled bool
 }
 
 func NewAdminConfig(adminConfOpts *AdminConfigOptions) *AdminConfig {
@@ -18,6 +16,5 @@ func newAdminConfig(adminConfOpts *AdminConfigOptions) *AdminConfig {
 	adminHttpConf := NewHttpConfig(&adminConfOpts.HttpConfigOptions)
 	return &AdminConfig{
 		HttpConfig: adminHttpConf,
-		StrictLoadingEnabled: adminConfOpts.StrictLoadingEnabled,
 	}
 }

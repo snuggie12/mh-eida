@@ -5,32 +5,26 @@ import (
 )
 
 type Config struct {
-	AdminConfigOptions *AdminConfigOptions `mapstructure:"admin,omitempty"`
-	InputConfig        *InputConfig
-	Logger             *zap.SugaredLogger
-	ReceiverConfigsOptions []*ReceiverConfigOptions `mapstructure:"receivers"`
+	AdminConfigOptions     *AdminConfigOptions     `mapstructure:"admin,omitempty"`
+	ComponentConfigOptions ComponentConfigOptions `mapstructure:",squash"`
+	Logger                 *zap.SugaredLogger
 }
 
-type ComponentsConfig struct {
-	ReceiverConfigs []ReceiverConfig
-}
+func (conf *Config) ParseFullConfig() (*ComponentConfigs, error) {
+	compConfOpts := conf.ComponentConfigOptions
 
-func NewConfig(addr string, port string, logger *zap.SugaredLogger) *Config {
-	return newConfig(addr, port, logger)
-}
+	receiverConfigs := make(map[string]*ReceiverConfig)
+	for receiverName, receiverConfOpts := range compConfOpts.ReceiverConfigOptions {
+		receiverConf, err := receiverConfOpts.Parse(receiverName)
+		if err != nil {
+			return nil, err
+		}
 
-func newConfig(addr string, port string, logger *zap.SugaredLogger) *Config {
-	inputConf := newInputConfig(addr, port)
-	conf := &Config{
-		InputConfig: inputConf,
+		receiverConfigs[receiverName] = receiverConf
 	}
 
-	return conf
-}
-
-func (conf *Config) ParseFullConfig() (*ComponentsConfig) {
-	ComponentsConf := ComponentsConfig{
-		ReceiverConfigs: ParseRecieverConfigs(conf.ReceiverConfigsOptions),
+	ComponentsConf := ComponentConfigs{
+		ReceiverConfigs: receiverConfigs,
 	}
-	return &ComponentsConf
+	return &ComponentsConf, nil
 }
