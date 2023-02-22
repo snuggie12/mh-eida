@@ -21,11 +21,6 @@ type Server struct {
 }
 
 func NewServer(conf *config.Config, logger *zap.SugaredLogger) *Server {
-	return newServer(conf, logger)
-}
-
-func newServer(conf *config.Config, logger *zap.SugaredLogger) *Server {
-	//adminConf := config.NewAdminConfig(conf.AdminConfigOptions)
 	return &Server{
 		Config: conf,
 		Logger: logger,
@@ -76,7 +71,7 @@ func (server *Server) StartAdminServer() {
 
 	go components.Parsers.Start()
 
-	go components.Receivers.Start()
+	go components.Receivers.Start(metricsServer)
 
 	for {
 		select {

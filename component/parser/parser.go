@@ -3,20 +3,22 @@ package parser
 import (
 	"snuggie12/eida/component/common"
 	"snuggie12/eida/config"
+	"snuggie12/eida/pkg/event"
 )
 
 type Parsers []*Parser
 
 type Parser struct {
 	ComponentCommon common.ComponentCommon
-	ParserName string
-	ParserConfig config.ParserConfig
+	ParserChan      chan event.UnparsedData
+	ParserName      string
+	ParserConfig    config.ParserConfig
 }
 
 func InitializeParsers(compCommon *common.ComponentCommon, parserConfs map[string]*config.ParserConfig) (Parsers, error) {
 	logger := compCommon.Logger
 	parsers := make([]*Parser, 0)
-	for parserName, parserConf := range(parserConfs) {
+	for parserName, parserConf := range parserConfs {
 		parser, err := initializeParser(compCommon, parserName, parserConf)
 		if err != nil {
 			logger.Errorw("Error while initializing parser.", "parser", parserName)
@@ -40,7 +42,7 @@ func initializeParser(compCommon *common.ComponentCommon, parserName string, par
 
 	return &Parser{
 		ComponentCommon: *compCommon,
-		ParserConfig: *parserConf,
+		ParserConfig:    *parserConf,
 	}, nil
 }
 

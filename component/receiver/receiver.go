@@ -3,12 +3,10 @@ package receiver
 import (
 	"snuggie12/eida/component/common"
 	"snuggie12/eida/config"
+	"snuggie12/eida/server/metrics"
 )
 
 type Receivers []*Receiver
-/* struct {
-	Receivers []*Receiver
-} */
 
 type Receiver struct {
 	ComponentCommon common.ComponentCommon
@@ -52,13 +50,14 @@ func validateReceiverConfig(receiverConf *config.ReceiverConfig) error {
 	return nil
 }
 
-func (receivers Receivers) Start() {
+func (receivers Receivers) Start(metricsServer *metrics.MetricsServer) {
 	for _, receiver := range receivers {
-		receiver.start()
+		switch genericType := config.GetGenericType(receiver.ReceiverConfig.Type); genericType {
+		case "http":
+			httpReceiver := NewHttpReceiver(&receiver.ReceiverConfig, metricsServer)
+			go httpReceiver.start(receiver.ComponentCommon.Logger)
+		default:
+			receiver.ComponentCommon.Logger.Info("Not an HTTP receiver. Implementation Needed")
+		}
 	}
-}
-
-func (receiver Receiver) start() {
-	logger := receiver.ComponentCommon.Logger
-	logger.Info("inside of receiver.start()")
 }

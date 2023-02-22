@@ -1,15 +1,20 @@
 package receiver
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"snuggie12/eida/config"
-	metricsTypes "snuggie12/eida/pkg/types/metrics"
+
 	"snuggie12/eida/server/metrics"
-	"time"
 
 	"go.uber.org/zap"
 )
+
+type serverAddress string
+var serverAddrCtxKey serverAddress = "serverAddr"
 
 type httpReceiver struct {
 	HttpAddress   string
@@ -20,10 +25,6 @@ type httpReceiver struct {
 }
 
 func NewHttpReceiver(receiverConf *config.ReceiverConfig, metricsServer *metrics.MetricsServer) *httpReceiver {
-	return newHttpReceiver(receiverConf, metricsServer)
-}
-
-func newHttpReceiver(receiverConf *config.ReceiverConfig, metricsServer *metrics.MetricsServer) *httpReceiver {
 	return &httpReceiver{
 		HttpAddress:   receiverConf.HttpConfig.HttpAddress,
 		Name:          receiverConf.Name,
@@ -33,11 +34,8 @@ func newHttpReceiver(receiverConf *config.ReceiverConfig, metricsServer *metrics
 	}
 }
 
-func startHttpReceiver(receiverConf *config.ReceiverConfig, logger *zap.SugaredLogger, metricsServer *metrics.MetricsServer) error {
-	httpReceiver := newHttpReceiver(receiverConf, metricsServer)
-
+func (httpReceiver *httpReceiver) start(logger *zap.SugaredLogger) error {
 	recAddress := httpReceiver.HttpAddress
-	recName := httpReceiver.Name
 	recPath := httpReceiver.Path
 	recPort := httpReceiver.HttpPort
 
@@ -47,64 +45,27 @@ func startHttpReceiver(receiverConf *config.ReceiverConfig, logger *zap.SugaredL
 		"port", recPort,
 	)
 
-	logger.Debug("before vars")
-	var (
-		recCounterInfo   metricsTypes.ReceiverRequestsCounterInfo
-		recHistogramInfo metricsTypes.ReceiverRequestsHistogramInfo
-	)
-
-	logger.Debug("after vars, before metrics server")
-	recMetricsServe := metricsServer.ReceiverMetricsServer
-
-	logger.Debug("before chans")
-	recCounterChan := recMetricsServe.RequestsCounterChan
-	recHistogramChan := recMetricsServe.RequestsHistogramChan
-	logger.Debug("after chans")
-
-	logger.Debug("before info")
-
-	recCounterInfo.ReceiverName, recHistogramInfo.ReceiverName = recName, recName
-	recCounterInfo.ReceiverPort, recHistogramInfo.ReceiverPort = recPort, recPort
-
-	twoExExHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t := time.Now()
-		w.WriteHeader(http.StatusOK)
-		recCounterInfo.StatusCode, recHistogramInfo.StatusCode = "200", "200"
-		recHistogramInfo.Duration = time.Since(t)
-		recCounterChan <- recCounterInfo
-		recHistogramChan <- recHistogramInfo
-
-		w.Write([]byte("200 - Hello from example application.\n"))
-	})
-	fourExExHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t := time.Now()
-		w.WriteHeader(http.StatusNotFound)
-		recCounterInfo.StatusCode, recHistogramInfo.StatusCode = "404", "404"
-		recHistogramInfo.Duration = time.Since(t)
-		recCounterChan <- recCounterInfo
-		recHistogramChan <- recHistogramInfo
-
-		w.Write([]byte("404 - Not Found\n"))
-	})
-	fiveExExHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t := time.Now()
-		w.WriteHeader(http.StatusInternalServerError)
-		recCounterInfo.StatusCode, recHistogramInfo.StatusCode = "503", "503"
-		recHistogramInfo.Duration = time.Since(t)
-		recCounterChan <- recCounterInfo
-		recHistogramChan <- recHistogramInfo
-
-		w.Write([]byte("503 - Bad Gateway\n"))
-	})
-
+	ctx, cancel := context.WithCancel(context.Background())
 	mux := http.NewServeMux()
-	mux.Handle("/", twoExExHandler)
-	mux.Handle("/err", fourExExHandler)
-	mux.Handle("/internal-err", fiveExExHandler)
+	mux.Handle(recPath, http.HandlerFunc(httpReceiver.handleWebhook))
 
-	var srv *http.Server
-	srv = &http.Server{Addr: fmt.Sprintf("%v:%v", httpReceiver.HttpAddress, httpReceiver.HttpPort), Handler: mux}
-	go logger.Fatal(srv.ListenAndServe())
+	srv := &http.Server{
+		Addr:    fmt.Sprintf("%v:%v", recAddress, recPort),
+		Handler: mux,
+		BaseContext: func(l net.Listener) context.Context {
+			ctx = context.WithValue(ctx, serverAddrCtxKey, l.Addr().String())
+			return ctx
+		},
+	}
+
+	err := srv.ListenAndServe()
+	if errors.Is(err, http.ErrServerClosed) {
+		fmt.Printf("server closed\n")
+	} else if err != nil {
+		fmt.Printf("error listening for server: %s\n", err)
+	}
+
+	cancel()
 	logger.Debug("donezo")
 	return nil
 }

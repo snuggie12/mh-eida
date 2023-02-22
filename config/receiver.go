@@ -10,7 +10,7 @@ type ReceiverConfigOptions struct {
 
 type ReceiverConfig struct {
 	HttpConfig `yaml:"http,omitempty" json:"http,omitempty"`
-	Name       string `yaml:"name"`
+	Name       string `yaml:"name" json:"name"`
 	TcpConfig  `yaml:"tcp,omitempty" json:"tcp,omitempty"`
 	Type       string `yaml:"type" json:"type"`
 }
